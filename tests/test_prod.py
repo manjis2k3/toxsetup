@@ -1,3 +1,4 @@
-from prod import calc
+from prod.prod import calc
+
 def test_calc():
     assert calc(3,2) == 6
