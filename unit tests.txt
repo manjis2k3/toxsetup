@@ -1,0 +1,458 @@
+https://github.com/bslatkin/effectivepython
+https://github.com/hjwp/book-example/tree/chapter_fixtures_and_debugging_staging
+
+https://pragprog.com/titles/bopytest/python-testing-with-pytest/
+Test Parameterisatuion
+=========================
+1) @pytest.mark.parametrize :- used to provide parameters to test functions
+test is run multile time for each value available in the parameter list
+
+2) Another way of extracting the setup responsibility from the test body is through the use of reusable test fixtures. pytest already has great native support for reusable fixtures that is truly magical.
+
+In pytest, a fixture is a reusable piece of setup and/or teardown code that can be provided as a dependency to the test functions
+
+pytest has a built-in dependency injection mechanism that allows for writing modular and scalable test suites.
+pytest runs fixture functions before test execution. 
+The return value of the fixture function  will be provided to the test function as an input argument.
+
+It is also possible to provide both setup and cleanup code in the same fixture function by using the following generator syntax:
+
+When generator syntax is used, pytest will obtain the yielded value of the fixture function and keep it suspended until the test finishes its execution. After the test finishes, pytest will resume execution of all used fixture functions just after the yield statement regardless of the test result (failure or success). This allows for the convenient and reliable cleanup of the test environment.
+
+Type of Fixtures
+===================
+1. Local fixture
+    fixtures defined in the same module or imported
+2. Shared fixture
+    fixtures defined in conftest module defined in same dir or parent dir. A test suite can have multiple conftest modules
+3. Plugin fixture -- last in the precedence.
+
+
+scope define the lifetime of fixture values. the scope determines when the 
+Scope of fixtures
+=============
+1. function scope
+2. class scope
+3. module scope
+4. package scope
+5. session scope
+
+
+import pytest
+@pytest.mark.parametrize(
+    "batch_size, expected", [
+        # even batches
+        [1, [[1], [2], [3], [4], [5], [6]]],
+        [2, [[1, 2], [3, 4], [5, 6]]],
+        [3, [[1, 2, 3], [4, 5, 6]]],
+        # batches with rest
+        [4, [[1, 2, 3, 4], [5, 6]]]
+    ]
+)
+def test_batch_parameterized(batch_size, expected):
+    iterable = [1, 2, 3, 4, 5, 6]
+    assert list(batches(iterable, batch_size)) == expected
+
+
+=================
+import pytest
+@pytest.fixture
+def dependency():
+    return "fixture value"
+
+def test_fixture(dependency):
+    pass
+
+@pytest.fixture
+def dependency_as_generator():
+    # setup code
+    yield "fixture value"
+    # teardown code
+
+
+unittest.mock module, which can be used to automate the creation of fake objects
+
+Mock objects are generic fake objects that can be used to isolate the tested code. They automate the building process of the fake object's input and output. There is a greater level of use of mock objects in statically typed languages, where monkey patching is harder, but they are still useful in Python to shorten the code that mimics external APIs.
+
+They are especially useful for faking external components and resources that we don't have full control over during the test.
+
+
+smtplib.SMTP implementation with a fake object.
+
+In order to achieve our goal, we will use two techniques
+
+Monkey patching: We will modify the smtplib module on the fly during the test run in order to trick the send() function into using a fake object in place of the smtplib.SMTP class.
+
+Object mocking: We will create a universal mock object that can act as a fake for absolutely any object. We will do that just to streamline our work.
+
+
+===================send function =======================
+import smtplib
+import email.message
+def send(
+    sender, to,
+    subject='None',
+    body='None',
+    server='localhost'
+):
+    """sends a message."""
+    message = email.message.Message()
+    message['To'] = to
+    message['From'] = sender
+    message['Subject'] = subject
+    message.set_payload(body)
+    client = smtplib.SMTP(server)
+    try:
+        return client.sendmail(sender, to, message.as_string())
+    finally:
+        client.quit()
+
+
+=============================================================================
+
+
+from mailer import send
+def test_send():
+    res = send(
+        'john.doe@example.com',
+        'john.doe@example.com',
+        'topic',
+        'body'
+    )
+    assert res == {}
+
+============================================
+ py.test -v --tb line
+
+--tb to receive one line trace backs
+=====================================================
+
+from unittest.mock import patch
+from mailer import send
+def test_send():
+    sender = "john.doe@example.com"
+    to = "jane.doe@example.com"
+    body = "Hello jane!"
+    subject = "How are you?"
+    with patch('smtplib.SMTP') as mock:
+        client = mock.return_value
+        client.sendmail.return_value = {}
+        res = send(sender, to, subject, body)
+        assert client.sendmail.called
+        assert client.sendmail.call_args[0][0] == sender
+        assert client.sendmail.call_args[0][1] == to
+        assert subject in client.sendmail.call_args[0][2]
+        assert body in client.sendmail.call_args[0][2]
+        assert res == {}
+
+
+
+Bestpractices
+==========
+
+Don’t check for empty containers or sequences (like [] or '') by comparing the length to zero (if len(somelist) == 0). Use if not somelist and assume that empty values will implicitly evaluate to False.
+
+Avoid single-line if statements, for and while loops, and except compound statements. Spread these over multiple lines for clarity.
+
+If you can’t fit an expression on one line, surround it with parentheses and add line breaks and indentation to make it easier to read.
+
+Prefer surrounding multiline expressions with parentheses over using the \ line continuation character.
+
+
+Functions, variables, and attributes should be in lowercase_underscore format
+
+Protected instance attributes should be in _leading_underscore format.
+
+Private instance attributes should be in __double_leading_underscore format.
+
+
+Import rules
+================
+Always put import statements (including from x import y) at the top of a file.
+
+Always use absolute names for modules when importing them, not names relative to the current module’s own path. For example, to import the foo module from within the bar package, you should use from bar import foo, not just import foo.
+
+If you must do relative imports, use the explicit syntax from . import foo.
+
+Imports should be in sections in the following order: standard library modules, third-party modules, your own modules. Each subsection should have imports in alphabetical order
+
+
+Know the Differences Between bytes and str
+
+
+=========================================
+from unittest import TestCase, main
+from utils import to_str
+
+class DataDrivenTestCase(TestCase):
+    def test_good(self):
+        good_cases = [
+            (b'my bytes', 'my bytes'),
+            ('no error', b'no error'), # This one will fail
+            ('other str', 'other str'),
+        ...
+    ]
+    for value, expected in good_cases:
+        with self.subTest(value):
+            self.assertEqual(expected, to_str(value))
+    def test_bad(self):
+        bad_cases = [ (object(), TypeError),
+            (b'\xfa\xfa', UnicodeDecodeError),
+            ...
+       ]
+       for value, exception in bad_cases:
+           with self.subTest(value):
+               with self.assertRaises(exception):
+                     to_str(value)
+
+if __name__ == '__main__':
+    main()
+
+The 'no error' test case fails, printing a helpful error message, but all of the other cases are still tested and confirmed to pass:
+
+
+ Isolate Tests from Each Other with setUp, tearDown, setUpModule, and tearDownModule
+
+# environment_test.py
+from pathlib import Path
+from tempfile import TemporaryDirectory
+from unittest import TestCase, main
+
+class EnvironmentTest(TestCase):
+    def setUp(self):
+        self.test_dir = TemporaryDirectory()
+    def tearDown(self):
+        self.test_dir.cleanup()
+
+ def test_modify_file(self):
+        with open(self.test_path / 'data.bin', 'w') as f:
+            ...
+
+if __name__ == '__main__':
+    main()
+
+
+# integration_test.py
+from unittest import TestCase, main
+
+def setUpModule():
+    print('* Module setup')
+
+def tearDownModule():
+    print('* Module clean-up')
+
+class IntegrationTest(TestCase):
+    def setUp(self):
+        print('* Test setup')
+
+    def tearDown(self):
+        print('* Test clean-up')
+
+    def test_end_to_end1(self):
+        print('* Test 1')
+
+    def test_end_to_end2(self):
+        print('* Test 2')
+
+if __name__ == '__main__':
+    main()
+
+
+I can clearly see that setUpModule is run by unittest only once, and it happens before any setUp methods are called. Similarly, tearDownModule happens after the tearDown method is called.
+
+Things to Remember
+
+✦ It’s important to write both unit tests (for isolated functionality) and integration tests (for modules that interact with each other).
+
+✦ Use the setUp and tearDown methods to make sure your tests are isolated from each other and have a clean test environment.
+
+✦ For integration tests, use the setUpModule and tearDownModule module-level functions to manage any test harnesses you need for the entire lifetime of a test module and all of the TestCase classes that it contains.
+
+
+
+Item 78: Use Mocks to Test Code with Complex Dependencies
+=============================================================
+
+class DatabaseConnection:
+    ...
+
+def get_animals(database, species):
+    # Query the database
+    ...
+    # Return a list of (name, last_mealtime) tuples
+
+==================================
+database = DatabaseConnection('localhost', '4444')
+
+get_animals(database, 'Meerkat')
+
+=======================================
+from datetime import datetime
+from unittest.mock import Mock
+
+mock = Mock(spec=get_animals)
+expected = [
+    ('Spot', datetime(2019, 6, 5, 11, 15)),
+    ('Fluffy', datetime(2019, 6, 5, 12, 30)),
+    ('Jojo', datetime(2019, 6, 5, 12, 45)),
+]
+mock.return_value = expected
+
+database = object()
+result = mock(database, 'Meerkat')
+assert result == expected
+mock.assert_called_once_with(database, 'Meerkat')
+
+mock.assert_called_once_with(database, 'Giraffe')--fails
+
+This verifies that the mock responded correctly, but how do I know if the code that called the mock provided the correct arguments? For this, the Mock class provides the assert_called_once_with method, which verifies that a single call with exactly the given parameters was made:
+
+
+Example
+def get_food_period(database, species):
+    # Query the database
+    ...
+    # Return a time delta
+
+def feed_animal(database, name, when):
+    # Write to the database
+    ...
+
+def do_rounds(database, species):
+    now = datetime.datetime.utcnow()
+    feeding_timedelta = get_food_period(database, species)
+    animals = get_animals(database, species)
+    fed = 0
+    for name, last_mealtime in animals:
+        if (now - last_mealtime) > feeding_timedelta:
+            feed_animal(database, name, now)
+            fed += 1
+    return fed
+
+Inorder to mock some changes would be required
+
+def do_rounds(database, species, *,
+              now_func=datetime.utcnow,
+              food_func=get_food_period,
+              animals_func=get_animals,
+              feed_func=feed_animal):
+    now = now_func()
+    feeding_timedelta = food_func(database, species)
+    animals = animals_func(database, species)
+    fed = 0
+   
+    for name, last_mealtime in animals:
+        if (now - last_mealtime) > feeding_timedelta:
+            feed_func(database, name, now)
+            fed += 1
+
+    return fed
+
+To test this function, I need to create all of the Mock instances upfront and set their expectations:
+
+from datetime import timedelta
+
+now_func = Mock(spec=datetime.utcnow)
+now_func.return_value = datetime(2019, 6, 5, 15, 45)
+
+food_func = Mock(spec=get_food_period)
+food_func.return_value = timedelta(hours=3)
+
+animals_func = Mock(spec=get_animals)
+animals_func.return_value = [
+    ('Spot', datetime(2019, 6, 5, 11, 15)),
+    ('Fluffy', datetime(2019, 6, 5, 12, 30)),
+    ('Jojo', datetime(2019, 6, 5, 12, 45)),
+]
+
+feed_func = Mock(spec=feed_animal)
+
+result = do_rounds(
+    database,
+    'Meerkat',
+    now_func=now_func,
+    food_func=food_func,
+    animals_func=animals_func,
+    feed_func=feed_func)
+
+assert result == 2
+
+Finally, I can verify that all of the calls to dependent functions matched my expectations:
+
+from unittest.mock import call
+
+food_func.assert_called_once_with(database, 'Meerkat')
+
+animals_func.assert_called_once_with(database, 'Meerkat')
+
+feed_func.assert_has_calls(
+    [
+        call(database, 'Spot', now_func.return_value),
+        call(database, 'Fluffy', now_func.return_value),
+    ],
+    any_order=True)
+
+
+
+
+The unittest.mock.patch family of functions makes injecting mocks easier. It temporarily reassigns an attribute of a module or class, such as the database-accessing functions that I defined above. For example, here I override get_animals to be a mock using patch:
+
+
+
+from unittest.mock import patch
+
+print('Outside patch:', get_animals)
+
+with patch('__main__.get_animals'):
+    print('Inside patch: ', get_animals)
+
+print('Outside again:', get_animals)
+
+help(unittest.mock.patch).
+=====================================================
+
+from unittest.mock import DEFAULT
+
+with patch.multiple('__main__',
+                    autospec=True,
+                    get_food_period=DEFAULT,
+                    get_animals=DEFAULT,
+                    feed_animal=DEFAULT):
+    now_func = Mock(spec=datetime.utcnow)
+    now_func.return_value = datetime(2019, 6, 5, 15, 45)
+    get_food_period.return_value = timedelta(hours=3)
+
+
+get_animals.return_value = [
+        ('Spot', datetime(2019, 6, 5, 11, 15)),
+        ('Fluffy', datetime(2019, 6, 5, 12, 30)),
+        ('Jojo', datetime(2019, 6, 5, 12, 45))
+    ]
+
+result = do_rounds(database, 'Meerkat', utcnow=now_func)
+    assert result == 2
+
+    food_func.assert_called_once_with(database, 'Meerkat')
+    animals_func.assert_called_once_with(database, 'Meerkat')
+    feed_func.assert_has_calls(
+    [
+        call(database, 'Spot', now_func.return_value),
+        call(database, 'Fluffy', now_func.return_value),
+    ],
+    any_order=True)
+
+With the setup ready, I can run the test and verify that the calls were correct inside the with statement that used patch.multiple:
+
+The keyword arguments to patch.multiple correspond to names in the __main__ module that I want to override during the test. The DEFAULT value indicates that I want a standard Mock instance to be created for each name. All of the generated mocks will adhere to the specification of the objects they are meant to simulate, thanks to the autospec=True parameter.
+
+Things to Remember
+
+✦ The unittest.mock module provides a way to simulate the behavior of interfaces using the Mock class. Mocks are useful in tests when it’s difficult to set up the dependencies that are required by the code that’s being tested.
+
+✦ When using mocks, it’s important to verify both the behavior of the code being tested and how dependent functions were called by that code, using the Mock.assert_called_once_with family of methods.
+
+✦ Keyword-only arguments and the unittest.mock.patch family of functions can be used to inject mocks into the code being tested.
+
+
+
+
